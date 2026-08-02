@@ -5,7 +5,7 @@
   // 請自行填入 Arcadia API Key。
   // ============================================================
   const ARCADIA_API_KEY =
-    "請把你的 Arcadia API Key 貼在這裡";
+    "CmX2KcMrXuFmNg6YFbmTxE0y9CIrOi0R";
 
   const WORKER_URL =
     "https://tennis-json-store.youjianchonglangshou.workers.dev";
@@ -14,7 +14,7 @@
   // 請填入和 Cloudflare Secret UPLOAD_TOKEN 完全相同的值。
   // ============================================================
   const WORKER_UPLOAD_TOKEN =
-    "請把你的 UPLOAD_TOKEN 貼在這裡";
+    "tennis_upload_2026_xxxxxxxxxxxxxxxx";
 
   const ALLOWED_ARCADIA_HOST =
     "guest.api.arcadia.pinnacle.com";
