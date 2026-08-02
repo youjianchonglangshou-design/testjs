@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>Arcadia → GitHub JSON</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <main class="page">
+    <header class="header">
+      <div>
+        <p class="eyebrow">ARCADIA → GITHUB</p>
+        <h1>雙 JSON 更新測試</h1>
+        <p class="subtitle">按一次 enter，瀏覽器取得兩份 Arcadia JSON，並用單一 Git commit 更新到 testjs 根目錄。</p>
+      </div>
+      <button id="enterButton" class="primary-button" type="button">enter</button>
+    </header>
+
+    <section class="api-panel" aria-label="API 網址">
+      <label class="api-row">
+        <span>賽事</span>
+        <input
+          id="matchupsUrl"
+          type="url"
+          value="https://guest.api.arcadia.pinnacle.com/0.1/sports/33/matchups?withSpecials=false"
+          autocomplete="off"
+          spellcheck="false"
+        >
+      </label>
+
+      <label class="api-row">
+        <span>賠率</span>
+        <input
+          id="marketsUrl"
+          type="url"
+          value="https://guest.api.arcadia.pinnacle.com/0.1/sports/33/markets/straight?primaryOnly=false&withSpecials=false"
+          autocomplete="off"
+          spellcheck="false"
+        >
+      </label>
+    </section>
+
+    <section class="summary-grid" aria-label="執行摘要">
+      <article>
+        <span>目標儲存庫</span>
+        <strong id="repoName">youjianchonglangshou-design/testjs</strong>
+      </article>
+      <article>
+        <span>目標分支</span>
+        <strong id="branchName">main</strong>
+      </article>
+      <article>
+        <span>Matchups</span>
+        <strong id="matchupsCount">—</strong>
+      </article>
+      <article>
+        <span>Markets</span>
+        <strong id="marketsCount">—</strong>
+      </article>
+    </section>
+
+    <section class="status-panel" aria-live="polite">
+      <div class="status-head">
+        <div>
+          <span id="statusDot" class="status-dot idle"></span>
+          <strong id="statusTitle">正在讀取上次資料</strong>
+        </div>
+        <span id="statusStage">初始化</span>
+      </div>
+      <p id="statusMessage">進入頁面不會抓 Arcadia；只有按 enter 才會更新。</p>
+      <div class="progress-track" aria-hidden="true">
+        <div id="progressBar" class="progress-bar" style="width: 8%"></div>
+      </div>
+      <a id="commitLink" class="commit-link" href="#" target="_blank" rel="noopener noreferrer" hidden>查看本次 GitHub commit</a>
+    </section>
+
+    <section class="viewer-panel">
+      <div class="viewer-toolbar">
+        <div>
+          <h2>JSON 預覽</h2>
+          <p id="viewerCaption">優先顯示 GitHub 根目錄裡上次保存的資料</p>
+        </div>
+        <div class="toolbar-actions">
+          <button id="copyButton" type="button" disabled>複製兩份</button>
+          <button id="downloadButton" type="button" disabled>本機下載兩份</button>
+        </div>
+      </div>
+      <pre id="jsonViewer">讀取中……</pre>
+    </section>
+
+    <section id="errorPanel" class="error-panel" hidden>
+      <h2>執行失敗</h2>
+      <p id="errorMessage"></p>
+      <details>
+        <summary>查看技術資訊</summary>
+        <pre id="errorDetails"></pre>
+      </details>
+    </section>
+
+    <footer>
+      <p>目標檔案：儲存庫根目錄的 <code>matchups.json</code> 與 <code>markets.json</code>。</p>
+    </footer>
+  </main>
+
+  <script src="./app.js"></script>
+</body>
+</html>
