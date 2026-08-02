@@ -2,19 +2,25 @@
   "use strict";
 
   // ============================================================
-  // 測試設定：請自行把兩組憑證貼在下方雙引號中。
-  // 注意：此檔案若放在公開 GitHub，任何人都能看見內容。
+  // Arcadia API Key：保留在 app.js，請自行填入雙引號中間。
   // ============================================================
   const ARCADIA_API_KEY = "CmX2KcMrXuFmNg6YFbmTxE0y9CIrOi0R";
-  const GITHUB_TOKEN = "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";
 
-  // 目標 GitHub 儲存庫已依照你的測試專案設定完成。
-  const GITHUB_OWNER = "youjianchonglangshou-design";
-  const GITHUB_REPO = "testjs";
-  const GITHUB_BRANCH = "main";
-  const GITHUB_API_VERSION = "2026-03-10";
+  // Cloudflare Worker：接收兩份 JSON，並寫入 R2 tennis-json。
+  const WORKER_URL =
+    "https://tennis-json-store.youjianchonglangshou.workers.dev";
 
-  const ALLOWED_ARCADIA_HOST = "guest.api.arcadia.pinnacle.com";
+  // ============================================================
+  // Cloudflare Worker UPLOAD_TOKEN：
+  // 請把你在 Cloudflare Secret 設定的值貼在下方雙引號中間。
+  // 例如：
+  // const WORKER_UPLOAD_TOKEN = "tennis_upload_2026_xxxxxxxxxxxxxxxx";
+  // ============================================================
+  const WORKER_UPLOAD_TOKEN =
+    "請把你的 UPLOAD_TOKEN 貼在這裡";
+
+  const ALLOWED_ARCADIA_HOST =
+    "guest.api.arcadia.pinnacle.com";
   const MATCHUPS_PATH = "matchups.json";
   const MARKETS_PATH = "markets.json";
 
@@ -26,8 +32,8 @@
     downloadButton: document.getElementById("downloadButton"),
     jsonViewer: document.getElementById("jsonViewer"),
     viewerCaption: document.getElementById("viewerCaption"),
-    repoName: document.getElementById("repoName"),
-    branchName: document.getElementById("branchName"),
+    workerName: document.getElementById("workerName"),
+    storageName: document.getElementById("storageName"),
     matchupsCount: document.getElementById("matchupsCount"),
     marketsCount: document.getElementById("marketsCount"),
     statusDot: document.getElementById("statusDot"),
@@ -35,7 +41,7 @@
     statusStage: document.getElementById("statusStage"),
     statusMessage: document.getElementById("statusMessage"),
     progressBar: document.getElementById("progressBar"),
-    commitLink: document.getElementById("commitLink"),
+    workerLink: document.getElementById("workerLink"),
     errorPanel: document.getElementById("errorPanel"),
     errorMessage: document.getElementById("errorMessage"),
     errorDetails: document.getElementById("errorDetails")
@@ -43,7 +49,13 @@
 
   let latestFiles = null;
 
-  function setStatus({ type = "idle", title, stage, message, progress }) {
+  function setStatus({
+    type = "idle",
+    title,
+    stage,
+    message,
+    progress
+  }) {
     elements.statusDot.className = `status-dot ${type}`;
     elements.statusTitle.textContent = title;
     elements.statusStage.textContent = stage;
@@ -58,8 +70,12 @@
   }
 
   function showError(error) {
-    const message = error instanceof Error ? error.message : String(error);
-    const details = error instanceof Error && error.stack ? error.stack : String(error);
+    const message = error instanceof Error
+      ? error.message
+      : String(error);
+    const details = error instanceof Error && error.stack
+      ? error.stack
+      : String(error);
 
     elements.errorPanel.hidden = false;
     elements.errorMessage.textContent = message;
@@ -71,14 +87,30 @@
       !ARCADIA_API_KEY.trim() ||
       ARCADIA_API_KEY.includes("請把你的")
     ) {
-      throw new Error("請先打開 app.js，填入 ARCADIA_API_KEY。");
+      throw new Error(
+        "請先打開 app.js，填入 ARCADIA_API_KEY。"
+      );
+    }
+
+    let parsed;
+
+    try {
+      parsed = new URL(WORKER_URL);
+    } catch {
+      throw new Error("WORKER_URL 格式不正確。");
+    }
+
+    if (parsed.protocol !== "https:") {
+      throw new Error("WORKER_URL 必須使用 HTTPS。");
     }
 
     if (
-      !GITHUB_TOKEN.trim() ||
-      GITHUB_TOKEN.includes("請把你的")
+      !WORKER_UPLOAD_TOKEN.trim() ||
+      WORKER_UPLOAD_TOKEN.includes("請把你的")
     ) {
-      throw new Error("請先打開 app.js，填入 GITHUB_TOKEN。");
+      throw new Error(
+        "請先打開 app.js，填入 WORKER_UPLOAD_TOKEN。"
+      );
     }
   }
 
@@ -102,19 +134,12 @@
     }
 
     if (parsed.hostname !== ALLOWED_ARCADIA_HOST) {
-      throw new Error(`${label} API 只允許 ${ALLOWED_ARCADIA_HOST}。`);
+      throw new Error(
+        `${label} API 只允許 ${ALLOWED_ARCADIA_HOST}。`
+      );
     }
 
     return parsed.toString();
-  }
-
-  function githubHeaders(includeJson = false) {
-    return {
-      Accept: "application/vnd.github+json",
-      Authorization: `Bearer ${GITHUB_TOKEN.trim()}`,
-      "X-GitHub-Api-Version": GITHUB_API_VERSION,
-      ...(includeJson ? { "Content-Type": "application/json" } : {})
-    };
   }
 
   async function readResponseError(response, fallback) {
@@ -122,7 +147,13 @@
 
     try {
       const payload = JSON.parse(text);
-      return payload.message || payload.detail || payload.title || fallback;
+      return (
+        payload.error ||
+        payload.message ||
+        payload.detail ||
+        payload.title ||
+        fallback
+      );
     } catch {
       return text || fallback;
     }
@@ -143,7 +174,9 @@
         response,
         `${label} API 抓取失敗`
       );
-      throw new Error(`${label} HTTP ${response.status}：${detail}`);
+      throw new Error(
+        `${label} HTTP ${response.status}：${detail}`
+      );
     }
 
     const text = await response.text();
@@ -151,164 +184,86 @@
     try {
       return JSON.parse(text);
     } catch {
-      throw new Error(`${label} API 回傳內容不是有效 JSON。`);
+      throw new Error(
+        `${label} API 回傳內容不是有效 JSON。`
+      );
     }
   }
 
-  async function githubRequest(path, options = {}) {
-    const response = await fetch(`https://api.github.com${path}`, {
-      ...options,
+  function getWorkerUploadToken() {
+    const token = WORKER_UPLOAD_TOKEN.trim();
+
+    if (
+      !token ||
+      token.includes("請把你的")
+    ) {
+      throw new Error(
+        "請先打開 app.js，填入 WORKER_UPLOAD_TOKEN。"
+      );
+    }
+
+    return token;
+  }
+
+  async function uploadJsonToWorker(
+    matchupsData,
+    marketsData
+  ) {
+    const token = getWorkerUploadToken();
+
+    const response = await fetch(`${WORKER_URL}/upload`, {
+      method: "POST",
       headers: {
-        ...githubHeaders(Boolean(options.body)),
-        ...(options.headers || {})
+        Accept: "application/json",
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`
       },
+      body: JSON.stringify({
+        matchups: matchupsData,
+        markets: marketsData
+      }),
       cache: "no-store"
     });
 
     if (!response.ok) {
       const detail = await readResponseError(
         response,
-        "GitHub API 請求失敗"
+        "Worker 上傳失敗"
       );
-      throw new Error(`GitHub HTTP ${response.status}：${detail}`);
+
+      if (response.status === 401) {
+        throw new Error(
+          `Worker HTTP 401：${detail}。` +
+          "請確認 app.js 裡的 WORKER_UPLOAD_TOKEN，" +
+          "和 Cloudflare Secret 的 UPLOAD_TOKEN 完全相同。"
+        );
+      }
+
+      throw new Error(
+        `Worker HTTP ${response.status}：${detail}`
+      );
     }
 
     return response.json();
   }
 
-  async function createBlob(content) {
-    const result = await githubRequest(
-      `/repos/${GITHUB_OWNER}/${GITHUB_REPO}/git/blobs`,
-      {
-        method: "POST",
-        body: JSON.stringify({
-          content,
-          encoding: "utf-8"
-        })
-      }
+  async function fetchWorkerJson(filename) {
+    const response = await fetch(
+      `${WORKER_URL}/${filename}?v=${Date.now()}`,
+      { cache: "no-store" }
     );
 
-    return result.sha;
-  }
+    if (!response.ok) {
+      const detail = await readResponseError(
+        response,
+        `${filename} 讀取失敗`
+      );
+      throw new Error(
+        `${filename} HTTP ${response.status}：${detail}`
+      );
+    }
 
-  async function commitBothFilesToGitHub(matchupsText, marketsText) {
-    setStatus({
-      type: "running",
-      title: "正在讀取 GitHub 分支",
-      stage: "4 / 8",
-      message: `取得 ${GITHUB_BRANCH} 的最新 commit。`,
-      progress: 52
-    });
-
-    const ref = await githubRequest(
-      `/repos/${GITHUB_OWNER}/${GITHUB_REPO}/git/ref/heads/${encodeURIComponent(GITHUB_BRANCH)}`
-    );
-    const currentCommitSha = ref.object.sha;
-
-    const currentCommit = await githubRequest(
-      `/repos/${GITHUB_OWNER}/${GITHUB_REPO}/git/commits/${currentCommitSha}`
-    );
-    const currentTreeSha = currentCommit.tree.sha;
-
-    setStatus({
-      type: "running",
-      title: "正在建立兩份 Git blob",
-      stage: "5 / 8",
-      message: "將 matchups.json 與 markets.json 轉成 Git 物件。",
-      progress: 64
-    });
-
-    const [matchupsBlobSha, marketsBlobSha] = await Promise.all([
-      createBlob(matchupsText),
-      createBlob(marketsText)
-    ]);
-
-    setStatus({
-      type: "running",
-      title: "正在建立 Git tree",
-      stage: "6 / 8",
-      message: "把兩份 JSON 放到儲存庫根目錄。",
-      progress: 75
-    });
-
-    const tree = await githubRequest(
-      `/repos/${GITHUB_OWNER}/${GITHUB_REPO}/git/trees`,
-      {
-        method: "POST",
-        body: JSON.stringify({
-          base_tree: currentTreeSha,
-          tree: [
-            {
-              path: MATCHUPS_PATH,
-              mode: "100644",
-              type: "blob",
-              sha: matchupsBlobSha
-            },
-            {
-              path: MARKETS_PATH,
-              mode: "100644",
-              type: "blob",
-              sha: marketsBlobSha
-            }
-          ]
-        })
-      }
-    );
-
-    setStatus({
-      type: "running",
-      title: "正在建立單一 commit",
-      stage: "7 / 8",
-      message: "兩份 JSON 會在同一次 commit 一起更新。",
-      progress: 86
-    });
-
-    const now = new Intl.DateTimeFormat("zh-TW", {
-      timeZone: "Asia/Taipei",
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
-      hour12: false
-    }).format(new Date());
-
-    const commit = await githubRequest(
-      `/repos/${GITHUB_OWNER}/${GITHUB_REPO}/git/commits`,
-      {
-        method: "POST",
-        body: JSON.stringify({
-          message: `Update Arcadia JSON ${now}`,
-          tree: tree.sha,
-          parents: [currentCommitSha]
-        })
-      }
-    );
-
-    setStatus({
-      type: "running",
-      title: "正在更新 main 分支",
-      stage: "8 / 8",
-      message: "將分支指向剛建立的新 commit。",
-      progress: 94
-    });
-
-    await githubRequest(
-      `/repos/${GITHUB_OWNER}/${GITHUB_REPO}/git/refs/heads/${encodeURIComponent(GITHUB_BRANCH)}`,
-      {
-        method: "PATCH",
-        body: JSON.stringify({
-          sha: commit.sha,
-          force: false
-        })
-      }
-    );
-
-    return {
-      sha: commit.sha,
-      url: `https://github.com/${GITHUB_OWNER}/${GITHUB_REPO}/commit/${commit.sha}`
-    };
+    return response.json();
   }
 
   function formatCombined(matchupsText, marketsText) {
@@ -345,7 +300,10 @@
     link.click();
     link.remove();
 
-    window.setTimeout(() => URL.revokeObjectURL(url), 10000);
+    window.setTimeout(
+      () => URL.revokeObjectURL(url),
+      10000
+    );
   }
 
   async function copyBoth() {
@@ -362,7 +320,8 @@
         type: "success",
         title: "已複製兩份 JSON",
         stage: "完成",
-        message: `已複製 ${text.length.toLocaleString()} 個字元。`,
+        message:
+          `已複製 ${text.length.toLocaleString()} 個字元。`,
         progress: 100
       });
     } catch (error) {
@@ -373,65 +332,82 @@
   function downloadBoth() {
     if (!latestFiles) return;
 
-    triggerDownload(latestFiles.matchups, MATCHUPS_PATH);
+    triggerDownload(
+      latestFiles.matchups,
+      MATCHUPS_PATH
+    );
     window.setTimeout(
-      () => triggerDownload(latestFiles.markets, MARKETS_PATH),
+      () => triggerDownload(
+        latestFiles.markets,
+        MARKETS_PATH
+      ),
       250
     );
   }
 
   async function loadPreviousFiles() {
     try {
-      const cacheBuster = Date.now();
-      const [matchupsResponse, marketsResponse] = await Promise.all([
-        fetch(`./${MATCHUPS_PATH}?v=${cacheBuster}`, { cache: "no-store" }),
-        fetch(`./${MARKETS_PATH}?v=${cacheBuster}`, { cache: "no-store" })
-      ]);
-
-      if (!matchupsResponse.ok || !marketsResponse.ok) {
-        throw new Error("尚無上次 JSON");
-      }
-
-      const [matchupsData, marketsData] = await Promise.all([
-        matchupsResponse.json(),
-        marketsResponse.json()
-      ]);
+      const [matchupsData, marketsData] =
+        await Promise.all([
+          fetchWorkerJson(MATCHUPS_PATH),
+          fetchWorkerJson(MARKETS_PATH)
+        ]);
 
       const files = {
-        matchups: JSON.stringify(matchupsData, null, 2),
-        markets: JSON.stringify(marketsData, null, 2)
+        matchups: JSON.stringify(
+          matchupsData,
+          null,
+          2
+        ),
+        markets: JSON.stringify(
+          marketsData,
+          null,
+          2
+        )
       };
 
-      displayFiles(files, "顯示 GitHub 根目錄裡上次保存的資料");
-      elements.matchupsCount.textContent = Array.isArray(matchupsData)
-        ? matchupsData.length
-        : "物件";
-      elements.marketsCount.textContent = Array.isArray(marketsData)
-        ? marketsData.length
-        : "物件";
+      displayFiles(
+        files,
+        "顯示 Cloudflare R2 裡上次保存的資料"
+      );
+
+      elements.matchupsCount.textContent =
+        Array.isArray(matchupsData)
+          ? matchupsData.length
+          : "物件";
+      elements.marketsCount.textContent =
+        Array.isArray(marketsData)
+          ? marketsData.length
+          : "物件";
 
       setStatus({
         type: "success",
-        title: "已載入上次資料",
+        title: "已載入 R2 上次資料",
         stage: "待命",
-        message: "只有按 enter 才會重新抓 Arcadia 並更新 GitHub。",
+        message:
+          "只有按 enter 才會重新抓 Arcadia 並覆蓋 R2。",
         progress: 100
       });
-    } catch {
-      elements.jsonViewer.textContent = "目前 GitHub 根目錄尚無 matchups.json 與 markets.json。";
+    } catch (error) {
+      elements.jsonViewer.textContent =
+        "Cloudflare R2 尚無 matchups.json 與 markets.json。";
+
       setStatus({
         type: "idle",
-        title: "尚無上次資料",
+        title: "R2 尚無上次資料",
         stage: "待命",
-        message: "填好 app.js 內兩組憑證後，按 enter 開始第一次更新。",
+        message:
+          "按 enter 完成第一次抓取與上傳後，資料會出現在這裡。",
         progress: 8
       });
+
+      console.info(error);
     }
   }
 
   async function run() {
     clearError();
-    elements.commitLink.hidden = true;
+    elements.workerLink.hidden = true;
     elements.enterButton.disabled = true;
     elements.enterButton.textContent = "執行中";
 
@@ -450,63 +426,114 @@
       setStatus({
         type: "running",
         title: "正在抓取 Arcadia",
-        stage: "1 / 8",
-        message: "使用目前瀏覽器所在電腦的網路，同時取得兩份資料。",
-        progress: 16
+        stage: "1 / 5",
+        message:
+          "使用目前瀏覽器所在電腦的網路，同時取得兩份資料。",
+        progress: 18
       });
 
-      const [matchupsData, marketsData] = await Promise.all([
-        fetchArcadiaJson(matchupsUrl, "賽事"),
-        fetchArcadiaJson(marketsUrl, "賠率")
-      ]);
+      const [matchupsData, marketsData] =
+        await Promise.all([
+          fetchArcadiaJson(matchupsUrl, "賽事"),
+          fetchArcadiaJson(marketsUrl, "賠率")
+        ]);
 
       setStatus({
         type: "running",
         title: "Arcadia 抓取成功",
-        stage: "2 / 8",
-        message: "正在格式化 matchups.json 與 markets.json。",
-        progress: 31
+        stage: "2 / 5",
+        message:
+          "正在格式化 matchups.json 與 markets.json。",
+        progress: 38
       });
 
       const files = {
-        matchups: JSON.stringify(matchupsData, null, 2),
-        markets: JSON.stringify(marketsData, null, 2)
+        matchups: JSON.stringify(
+          matchupsData,
+          null,
+          2
+        ),
+        markets: JSON.stringify(
+          marketsData,
+          null,
+          2
+        )
       };
 
-      elements.matchupsCount.textContent = Array.isArray(matchupsData)
-        ? matchupsData.length
-        : "物件";
-      elements.marketsCount.textContent = Array.isArray(marketsData)
-        ? marketsData.length
-        : "物件";
+      elements.matchupsCount.textContent =
+        Array.isArray(matchupsData)
+          ? matchupsData.length
+          : "物件";
+      elements.marketsCount.textContent =
+        Array.isArray(marketsData)
+          ? marketsData.length
+          : "物件";
 
-      displayFiles(files, "顯示本次剛取得、準備送入 GitHub 的兩份 JSON");
+      displayFiles(
+        files,
+        "顯示本次剛取得、準備送入 Cloudflare R2 的兩份 JSON"
+      );
 
       setStatus({
         type: "running",
-        title: "準備寫入 GitHub",
-        stage: "3 / 8",
-        message: "驗證 testjs 儲存庫與 main 分支。",
-        progress: 42
+        title: "正在送往 Cloudflare Worker",
+        stage: "3 / 5",
+        message:
+          "Worker 驗證 UPLOAD_TOKEN 後，會覆蓋 R2 兩份檔案。",
+        progress: 58
       });
 
-      const commit = await commitBothFilesToGitHub(
-        files.matchups,
-        files.markets
+      const uploadResult = await uploadJsonToWorker(
+        matchupsData,
+        marketsData
       );
 
-      elements.commitLink.href = commit.url;
-      elements.commitLink.hidden = false;
+      setStatus({
+        type: "running",
+        title: "R2 寫入成功",
+        stage: "4 / 5",
+        message:
+          "正在從 Worker 重新讀取兩份 JSON，確認保存結果。",
+        progress: 78
+      });
+
+      const [savedMatchups, savedMarkets] =
+        await Promise.all([
+          fetchWorkerJson(MATCHUPS_PATH),
+          fetchWorkerJson(MARKETS_PATH)
+        ]);
+
+      const savedFiles = {
+        matchups: JSON.stringify(
+          savedMatchups,
+          null,
+          2
+        ),
+        markets: JSON.stringify(
+          savedMarkets,
+          null,
+          2
+        )
+      };
+
+      displayFiles(
+        savedFiles,
+        "已從 Cloudflare R2 讀回並驗證本次保存的兩份 JSON"
+      );
+
+      elements.workerLink.href =
+        `${WORKER_URL}/meta.json?v=${Date.now()}`;
+      elements.workerLink.hidden = false;
 
       setStatus({
         type: "success",
-        title: "GitHub 更新完成",
-        stage: "完成",
-        message: "matchups.json 與 markets.json 已在同一次 commit 寫入儲存庫根目錄。",
+        title: "Cloudflare R2 更新完成",
+        stage: "5 / 5",
+        message:
+          `matchups：${uploadResult.matchupCount} 筆；` +
+          `markets：${uploadResult.marketCount} 筆。`,
         progress: 100
       });
-
-      elements.viewerCaption.textContent = "本次資料已成功寫入 GitHub 根目錄";
     } catch (error) {
       console.error(error);
       showError(error);
@@ -515,7 +542,9 @@
         type: "error",
         title: "執行失敗",
         stage: "中止",
-        message: error instanceof Error ? error.message : String(error),
+        message: error instanceof Error
+          ? error.message
+          : String(error),
         progress: 100
       });
     } finally {
@@ -524,13 +553,21 @@
     }
   }
 
-  elements.repoName.textContent = `${GITHUB_OWNER}/${GITHUB_REPO}`;
-  elements.branchName.textContent = GITHUB_BRANCH;
+  elements.workerName.textContent =
+    new URL(WORKER_URL).hostname;
+  elements.storageName.textContent = "R2 / tennis-json";
+  elements.workerLink.href = `${WORKER_URL}/health`;
+
   elements.enterButton.addEventListener("click", run);
   elements.copyButton.addEventListener("click", copyBoth);
-  elements.downloadButton.addEventListener("click", downloadBoth);
-
-  for (const input of [elements.matchupsUrl, elements.marketsUrl]) {
+  elements.downloadButton.addEventListener(
+    "click",
+    downloadBoth
+  );
+  for (const input of [
+    elements.matchupsUrl,
+    elements.marketsUrl
+  ]) {
     input.addEventListener("keydown", event => {
       if (event.key === "Enter") run();
     });

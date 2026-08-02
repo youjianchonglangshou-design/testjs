@@ -4,16 +4,16 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light">
-  <title>Arcadia → GitHub JSON</title>
+  <title>Arcadia → Cloudflare R2</title>
   <link rel="stylesheet" href="./styles.css">
 </head>
 <body>
   <main class="page">
     <header class="header">
       <div>
-        <p class="eyebrow">ARCADIA → GITHUB</p>
+        <p class="eyebrow">ARCADIA → CLOUDFLARE R2</p>
         <h1>雙 JSON 更新測試</h1>
-        <p class="subtitle">按一次 enter，瀏覽器取得兩份 Arcadia JSON，並用單一 Git commit 更新到 testjs 根目錄。</p>
+        <p class="subtitle">在 app.js 填入兩組 Key；按一次 enter，瀏覽器取得兩份 Arcadia JSON，交給 Worker 保存到 R2。</p>
       </div>
       <button id="enterButton" class="primary-button" type="button">enter</button>
     </header>
@@ -35,7 +35,7 @@
         <input
           id="marketsUrl"
           type="url"
-          value="https://guest.api.arcadia.pinnacle.com/0.1/sports/33/markets/straight?primaryOnly=false&withSpecials=false"
+          value="https://guest.api.arcadia.pinnacle.com/0.1/sports/33/markets/straight?primaryOnly=false&amp;withSpecials=false"
           autocomplete="off"
           spellcheck="false"
         >
@@ -44,12 +44,12 @@
 
     <section class="summary-grid" aria-label="執行摘要">
       <article>
-        <span>目標儲存庫</span>
-        <strong id="repoName">youjianchonglangshou-design/testjs</strong>
+        <span>Cloudflare Worker</span>
+        <strong id="workerName">讀取中</strong>
       </article>
       <article>
-        <span>目標分支</span>
-        <strong id="branchName">main</strong>
+        <span>資料儲存</span>
+        <strong id="storageName">R2 / tennis-json</strong>
       </article>
       <article>
         <span>Matchups</span>
@@ -65,7 +65,7 @@
       <div class="status-head">
         <div>
           <span id="statusDot" class="status-dot idle"></span>
-          <strong id="statusTitle">正在讀取上次資料</strong>
+          <strong id="statusTitle">正在讀取 R2 上次資料</strong>
         </div>
         <span id="statusStage">初始化</span>
       </div>
@@ -73,14 +73,14 @@
       <div class="progress-track" aria-hidden="true">
         <div id="progressBar" class="progress-bar" style="width: 8%"></div>
       </div>
-      <a id="commitLink" class="commit-link" href="#" target="_blank" rel="noopener noreferrer" hidden>查看本次 GitHub commit</a>
+      <a id="workerLink" class="commit-link" href="#" target="_blank" rel="noopener noreferrer" hidden>查看 Cloudflare meta.json</a>
     </section>
 
     <section class="viewer-panel">
       <div class="viewer-toolbar">
         <div>
           <h2>JSON 預覽</h2>
-          <p id="viewerCaption">優先顯示 GitHub 根目錄裡上次保存的資料</p>
+          <p id="viewerCaption">優先顯示 Cloudflare R2 裡上次保存的資料</p>
         </div>
         <div class="toolbar-actions">
           <button id="copyButton" type="button" disabled>複製兩份</button>
@@ -100,7 +100,7 @@
     </section>
 
     <footer>
-      <p>目標檔案：儲存庫根目錄的 <code>matchups.json</code> 與 <code>markets.json</code>。</p>
+      <p>目標檔案：Cloudflare R2 <code>tennis-json/matchups.json</code>、<code>markets.json</code> 與 <code>meta.json</code>。</p>
     </footer>
   </main>
 
