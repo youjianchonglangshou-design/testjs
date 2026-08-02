@@ -2,22 +2,19 @@
   "use strict";
 
   // ============================================================
-  // Arcadia API Key：保留在 app.js，請自行填入雙引號中間。
+  // 請自行填入 Arcadia API Key。
   // ============================================================
-  const ARCADIA_API_KEY = "CmX2KcMrXuFmNg6YFbmTxE0y9CIrOi0R";
+  const ARCADIA_API_KEY =
+    "請把你的 Arcadia API Key 貼在這裡";
 
-  // Cloudflare Worker：接收兩份 JSON，並寫入 R2 tennis-json。
   const WORKER_URL =
     "https://tennis-json-store.youjianchonglangshou.workers.dev";
 
   // ============================================================
-  // Cloudflare Worker UPLOAD_TOKEN：
-  // 請把你在 Cloudflare Secret 設定的值貼在下方雙引號中間。
-  // 例如：
-  // const WORKER_UPLOAD_TOKEN = "tennis_upload_2026_xxxxxxxxxxxxxxxx";
+  // 請填入和 Cloudflare Secret UPLOAD_TOKEN 完全相同的值。
   // ============================================================
   const WORKER_UPLOAD_TOKEN =
-    "tennis_upload_2026_xxxxxxxxxxxxxxxx";
+    "請把你的 UPLOAD_TOKEN 貼在這裡";
 
   const ALLOWED_ARCADIA_HOST =
     "guest.api.arcadia.pinnacle.com";
@@ -36,6 +33,9 @@
     storageName: document.getElementById("storageName"),
     matchupsCount: document.getElementById("matchupsCount"),
     marketsCount: document.getElementById("marketsCount"),
+    oddsTableBody: document.getElementById("oddsTableBody"),
+    oddsTableCount: document.getElementById("oddsTableCount"),
+    oddsTableCaption: document.getElementById("oddsTableCaption"),
     statusDot: document.getElementById("statusDot"),
     statusTitle: document.getElementById("statusTitle"),
     statusStage: document.getElementById("statusStage"),
@@ -92,6 +92,15 @@
       );
     }
 
+    if (
+      !WORKER_UPLOAD_TOKEN.trim() ||
+      WORKER_UPLOAD_TOKEN.includes("請把你的")
+    ) {
+      throw new Error(
+        "請先打開 app.js，填入 WORKER_UPLOAD_TOKEN。"
+      );
+    }
+
     let parsed;
 
     try {
@@ -102,15 +111,6 @@
 
     if (parsed.protocol !== "https:") {
       throw new Error("WORKER_URL 必須使用 HTTPS。");
-    }
-
-    if (
-      !WORKER_UPLOAD_TOKEN.trim() ||
-      WORKER_UPLOAD_TOKEN.includes("請把你的")
-    ) {
-      throw new Error(
-        "請先打開 app.js，填入 WORKER_UPLOAD_TOKEN。"
-      );
     }
   }
 
@@ -190,33 +190,17 @@
     }
   }
 
-  function getWorkerUploadToken() {
-    const token = WORKER_UPLOAD_TOKEN.trim();
-
-    if (
-      !token ||
-      token.includes("請把你的")
-    ) {
-      throw new Error(
-        "請先打開 app.js，填入 WORKER_UPLOAD_TOKEN。"
-      );
-    }
-
-    return token;
-  }
-
   async function uploadJsonToWorker(
     matchupsData,
     marketsData
   ) {
-    const token = getWorkerUploadToken();
-
     const response = await fetch(`${WORKER_URL}/upload`, {
       method: "POST",
       headers: {
         Accept: "application/json",
         "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`
+        Authorization:
+          `Bearer ${WORKER_UPLOAD_TOKEN.trim()}`
       },
       body: JSON.stringify({
         matchups: matchupsData,
@@ -266,6 +250,285 @@
     return response.json();
   }
 
+  function decimalOdds(americanPrice) {
+    if (
+      americanPrice === null ||
+      americanPrice === undefined ||
+      americanPrice === "鎖盤中"
+    ) {
+      return "鎖盤中";
+    }
+
+    const value = Number(americanPrice);
+
+    if (!Number.isFinite(value) || value === 0) {
+      return "鎖盤中";
+    }
+
+    const decimal = value > 0
+      ? value / 100 + 1
+      : 100 / Math.abs(value) + 1;
+
+    return decimal.toFixed(3);
+  }
+
+  function getTaipeiDateParts(date) {
+    const formatter = new Intl.DateTimeFormat(
+      "en-CA",
+      {
+        timeZone: "Asia/Taipei",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        hourCycle: "h23"
+      }
+    );
+
+    return Object.fromEntries(
+      formatter
+        .formatToParts(date)
+        .filter(part => part.type !== "literal")
+        .map(part => [part.type, part.value])
+    );
+  }
+
+  function getMatchStart(matchup) {
+    let raw = matchup?.startTime;
+
+    if (!raw && Array.isArray(matchup?.periods)) {
+      const mainPeriod = matchup.periods.find(
+        period =>
+          period &&
+          Number(period.period) === 0 &&
+          period.cutoffAt
+      );
+
+      raw = mainPeriod?.cutoffAt;
+    }
+
+    if (!raw) {
+      return {
+        text: "未知",
+        sortValue: Number.MAX_SAFE_INTEGER
+      };
+    }
+
+    const date = new Date(raw);
+
+    if (Number.isNaN(date.getTime())) {
+      return {
+        text: "時間錯誤",
+        sortValue: Number.MAX_SAFE_INTEGER
+      };
+    }
+
+    const parts = getTaipeiDateParts(date);
+
+    return {
+      text:
+        `${parts.year}-${parts.month}-${parts.day} ` +
+        `${parts.hour}:${parts.minute}`,
+      sortValue: date.getTime()
+    };
+  }
+
+  function getParticipants(matchup) {
+    const result = {
+      home: "未知",
+      away: "未知"
+    };
+
+    if (!Array.isArray(matchup?.participants)) {
+      return result;
+    }
+
+    for (const participant of matchup.participants) {
+      if (!participant || !participant.name) continue;
+
+      if (participant.alignment === "home") {
+        result.home = participant.name;
+      }
+
+      if (participant.alignment === "away") {
+        result.away = participant.name;
+      }
+    }
+
+    return result;
+  }
+
+  function marketScore(market, prices) {
+    let score = 0;
+
+    if (String(market?.status || "").toLowerCase() === "open") {
+      score += 4;
+    }
+
+    if (market?.isAlternate !== true) {
+      score += 2;
+    }
+
+    if (
+      prices.home !== undefined &&
+      prices.away !== undefined
+    ) {
+      score += 1;
+    }
+
+    return score;
+  }
+
+  function buildMoneylineMap(marketsData) {
+    const moneylines = new Map();
+
+    if (!Array.isArray(marketsData)) {
+      return moneylines;
+    }
+
+    for (const market of marketsData) {
+      if (
+        !market ||
+        market.type !== "moneyline" ||
+        Number(market.period) !== 0
+      ) {
+        continue;
+      }
+
+      const prices = {};
+
+      if (Array.isArray(market.prices)) {
+        for (const item of market.prices) {
+          if (!item?.designation) continue;
+          prices[item.designation] = item.price;
+        }
+      }
+
+      const matchupId = String(
+        market.matchupId ?? ""
+      );
+
+      if (!matchupId) continue;
+
+      const candidate = {
+        homeOdds: decimalOdds(prices.home),
+        awayOdds: decimalOdds(prices.away),
+        score: marketScore(market, prices)
+      };
+
+      const current = moneylines.get(matchupId);
+
+      if (!current || candidate.score >= current.score) {
+        moneylines.set(matchupId, candidate);
+      }
+    }
+
+    return moneylines;
+  }
+
+  function buildOddsRows(matchupsData, marketsData) {
+    if (!Array.isArray(matchupsData)) {
+      return [];
+    }
+
+    const moneylines = buildMoneylineMap(marketsData);
+    const rows = [];
+
+    for (const matchup of matchupsData) {
+      const matchupId = String(matchup?.id ?? "");
+      const market = moneylines.get(matchupId);
+
+      // 目前表格只顯示有全場 moneyline 的比賽。
+      if (!market) continue;
+
+      const participants = getParticipants(matchup);
+      const start = getMatchStart(matchup);
+
+      rows.push({
+        matchupId,
+        dateTime: start.text,
+        sortValue: start.sortValue,
+        home: participants.home,
+        away: participants.away,
+        homeOdds: market.homeOdds,
+        awayOdds: market.awayOdds
+      });
+    }
+
+    rows.sort((left, right) => {
+      if (left.sortValue !== right.sortValue) {
+        return left.sortValue - right.sortValue;
+      }
+
+      return left.matchupId.localeCompare(
+        right.matchupId
+      );
+    });
+
+    return rows;
+  }
+
+  function addCell(row, text, className = "") {
+    const cell = document.createElement("td");
+    cell.textContent = text;
+
+    if (className) {
+      cell.className = className;
+    }
+
+    row.appendChild(cell);
+  }
+
+  function renderOddsTable(
+    matchupsData,
+    marketsData,
+    caption
+  ) {
+    const rows = buildOddsRows(
+      matchupsData,
+      marketsData
+    );
+
+    elements.oddsTableBody.textContent = "";
+    elements.oddsTableCount.textContent =
+      `${rows.length} 場`;
+    elements.oddsTableCaption.textContent = caption;
+
+    if (rows.length === 0) {
+      const row = document.createElement("tr");
+      row.className = "empty-row";
+
+      const cell = document.createElement("td");
+      cell.colSpan = 4;
+      cell.textContent =
+        "目前沒有可配對的全場勝負賠率。";
+
+      row.appendChild(cell);
+      elements.oddsTableBody.appendChild(row);
+      return;
+    }
+
+    const fragment = document.createDocumentFragment();
+
+    for (const item of rows) {
+      const row = document.createElement("tr");
+
+      addCell(row, item.dateTime, "date-cell");
+      addCell(
+        row,
+        `${item.home}  vs  ${item.away}`,
+        "match-cell"
+      );
+      addCell(row, item.homeOdds, "odds-cell");
+      addCell(row, item.awayOdds, "odds-cell");
+
+      fragment.appendChild(row);
+    }
+
+    elements.oddsTableBody.appendChild(fragment);
+  }
+
   function formatCombined(matchupsText, marketsText) {
     return [
       "========== matchups.json ==========",
@@ -276,8 +539,26 @@
     ].join("\n");
   }
 
-  function displayFiles(files, caption) {
+  function displayData(
+    matchupsData,
+    marketsData,
+    caption
+  ) {
+    const files = {
+      matchups: JSON.stringify(
+        matchupsData,
+        null,
+        2
+      ),
+      markets: JSON.stringify(
+        marketsData,
+        null,
+        2
+      )
+    };
+
     latestFiles = files;
+
     elements.jsonViewer.textContent = formatCombined(
       files.matchups,
       files.markets
@@ -285,6 +566,12 @@
     elements.viewerCaption.textContent = caption;
     elements.copyButton.disabled = false;
     elements.downloadButton.disabled = false;
+
+    renderOddsTable(
+      matchupsData,
+      marketsData,
+      caption
+    );
   }
 
   function triggerDownload(text, filename) {
@@ -353,21 +640,9 @@
           fetchWorkerJson(MARKETS_PATH)
         ]);
 
-      const files = {
-        matchups: JSON.stringify(
-          matchupsData,
-          null,
-          2
-        ),
-        markets: JSON.stringify(
-          marketsData,
-          null,
-          2
-        )
-      };
-
-      displayFiles(
-        files,
+      displayData(
+        matchupsData,
+        marketsData,
         "顯示 Cloudflare R2 裡上次保存的資料"
       );
 
@@ -385,12 +660,20 @@
         title: "已載入 R2 上次資料",
         stage: "待命",
         message:
-          "只有按 enter 才會重新抓 Arcadia 並覆蓋 R2。",
+          "已組合比賽日期時間、對陣與雙方賠率；按 enter 才會重新抓取。",
         progress: 100
       });
     } catch (error) {
+      latestFiles = null;
+      elements.copyButton.disabled = true;
+      elements.downloadButton.disabled = true;
       elements.jsonViewer.textContent =
         "Cloudflare R2 尚無 matchups.json 與 markets.json。";
+      elements.oddsTableBody.innerHTML =
+        '<tr class="empty-row"><td colspan="4">R2 尚無可顯示資料。</td></tr>';
+      elements.oddsTableCount.textContent = "0 場";
+      elements.oddsTableCaption.textContent =
+        "按 enter 完成第一次抓取與上傳後，這裡會顯示表格。";
 
       setStatus({
         type: "idle",
@@ -443,22 +726,9 @@
         title: "Arcadia 抓取成功",
         stage: "2 / 5",
         message:
-          "正在格式化 matchups.json 與 markets.json。",
+          "正在依 matchupId 組合比賽與全場勝負賠率。",
         progress: 38
       });
-
-      const files = {
-        matchups: JSON.stringify(
-          matchupsData,
-          null,
-          2
-        ),
-        markets: JSON.stringify(
-          marketsData,
-          null,
-          2
-        )
-      };
 
       elements.matchupsCount.textContent =
         Array.isArray(matchupsData)
@@ -469,9 +739,10 @@
           ? marketsData.length
           : "物件";
 
-      displayFiles(
-        files,
-        "顯示本次剛取得、準備送入 Cloudflare R2 的兩份 JSON"
+      displayData(
+        matchupsData,
+        marketsData,
+        "顯示本次剛取得、準備送入 Cloudflare R2 的資料"
       );
 
       setStatus({
@@ -503,22 +774,10 @@
           fetchWorkerJson(MARKETS_PATH)
         ]);
 
-      const savedFiles = {
-        matchups: JSON.stringify(
-          savedMatchups,
-          null,
-          2
-        ),
-        markets: JSON.stringify(
-          savedMarkets,
-          null,
-          2
-        )
-      };
-
-      displayFiles(
-        savedFiles,
-        "已從 Cloudflare R2 讀回並驗證本次保存的兩份 JSON"
+      displayData(
+        savedMatchups,
+        savedMarkets,
+        "已從 Cloudflare R2 讀回並驗證本次保存的資料"
       );
 
       elements.workerLink.href =
@@ -531,7 +790,8 @@
         stage: "5 / 5",
         message:
           `matchups：${uploadResult.matchupCount} 筆；` +
-          `markets：${uploadResult.marketCount} 筆。`,
+          `markets：${uploadResult.marketCount} 筆；` +
+          `表格：${buildOddsRows(savedMatchups, savedMarkets).length} 場。`,
         progress: 100
       });
     } catch (error) {
@@ -564,6 +824,7 @@
     "click",
     downloadBoth
   );
+
   for (const input of [
     elements.matchupsUrl,
     elements.marketsUrl

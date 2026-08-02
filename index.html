@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="color-scheme" content="light">
+  <meta name="color-scheme" content="dark">
   <title>Arcadia → Cloudflare R2</title>
   <link rel="stylesheet" href="./styles.css">
 </head>
@@ -13,7 +13,9 @@
       <div>
         <p class="eyebrow">ARCADIA → CLOUDFLARE R2</p>
         <h1>雙 JSON 更新測試</h1>
-        <p class="subtitle">在 app.js 填入兩組 Key；按一次 enter，瀏覽器取得兩份 Arcadia JSON，交給 Worker 保存到 R2。</p>
+        <p class="subtitle">
+          頁面先讀取 R2 上次資料並組成比賽表格；按一次 enter 才重新抓取 Arcadia 並覆蓋 R2。
+        </p>
       </div>
       <button id="enterButton" class="primary-button" type="button">enter</button>
     </header>
@@ -73,7 +75,42 @@
       <div class="progress-track" aria-hidden="true">
         <div id="progressBar" class="progress-bar" style="width: 8%"></div>
       </div>
-      <a id="workerLink" class="commit-link" href="#" target="_blank" rel="noopener noreferrer" hidden>查看 Cloudflare meta.json</a>
+      <a
+        id="workerLink"
+        class="commit-link"
+        href="#"
+        target="_blank"
+        rel="noopener noreferrer"
+        hidden
+      >查看 Cloudflare meta.json</a>
+    </section>
+
+    <section class="table-panel">
+      <div class="table-toolbar">
+        <div>
+          <h2>比賽賠率表</h2>
+          <p id="oddsTableCaption">正在組合 matchups.json 與 markets.json</p>
+        </div>
+        <strong id="oddsTableCount" class="table-count">0 場</strong>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>比賽日期時間</th>
+              <th>比賽對陣</th>
+              <th>主場賠率</th>
+              <th>客場賠率</th>
+            </tr>
+          </thead>
+          <tbody id="oddsTableBody">
+            <tr class="empty-row">
+              <td colspan="4">正在讀取 R2 資料……</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </section>
 
     <section class="viewer-panel">
@@ -100,7 +137,12 @@
     </section>
 
     <footer>
-      <p>目標檔案：Cloudflare R2 <code>tennis-json/matchups.json</code>、<code>markets.json</code> 與 <code>meta.json</code>。</p>
+      <p>
+        資料來源：Cloudflare R2
+        <code>tennis-json/matchups.json</code>、
+        <code>markets.json</code> 與
+        <code>meta.json</code>。
+      </p>
     </footer>
   </main>
 
