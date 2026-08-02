@@ -17,7 +17,7 @@
   // const WORKER_UPLOAD_TOKEN = "tennis_upload_2026_xxxxxxxxxxxxxxxx";
   // ============================================================
   const WORKER_UPLOAD_TOKEN =
-    "請把你的 UPLOAD_TOKEN 貼在這裡";
+    "tennis_upload_2026_xxxxxxxxxxxxxxxx";
 
   const ALLOWED_ARCADIA_HOST =
     "guest.api.arcadia.pinnacle.com";
