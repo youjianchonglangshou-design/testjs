@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>GitHub 專案檔案管理器</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <main class="app-shell">
+    <section class="panel">
+      <div class="title-row">
+        <div>
+          <h1>GitHub 專案檔案管理器</h1>
+          <p>讀取 Repository、勾選檔案、直接刪除並 Commit。</p>
+        </div>
+        <a id="openGithubLink" class="ghost-link" target="_blank" rel="noopener">開啟 GitHub ↗</a>
+      </div>
+
+      <div class="config-grid">
+        <label>
+          <span>Owner</span>
+          <input id="ownerInput" value="youjianchonglangshou-design" autocomplete="off" />
+        </label>
+
+        <label>
+          <span>Repository</span>
+          <input id="repoInput" value="testjs" autocomplete="off" />
+        </label>
+
+        <label>
+          <span>Branch</span>
+          <input id="branchInput" value="main" autocomplete="off" />
+        </label>
+
+        <label class="token-field">
+          <span>GitHub Token（只存在目前分頁，不儲存）</span>
+          <input id="tokenInput" type="password" placeholder="github_pat_..." autocomplete="off" />
+        </label>
+      </div>
+
+      <div class="actions">
+        <button id="loadBtn" class="primary">讀取專案</button>
+        <button id="refreshBtn">重新整理</button>
+        <button id="deleteBtn" class="danger" disabled>刪除已勾選檔案</button>
+      </div>
+
+      <div id="status" class="status" data-type="info">尚未讀取。</div>
+    </section>
+
+    <section class="panel">
+      <div class="toolbar">
+        <div id="breadcrumb" class="breadcrumb"></div>
+        <label class="select-all">
+          <input id="selectAll" type="checkbox" />
+          <span>全選本頁檔案</span>
+        </label>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th class="check-col"></th>
+              <th>名稱</th>
+              <th>類型</th>
+              <th>大小</th>
+              <th>SHA</th>
+            </tr>
+          </thead>
+          <tbody id="fileBody">
+            <tr>
+              <td colspan="5" class="empty">請先按「讀取專案」</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <dialog id="confirmDialog">
+    <form method="dialog" class="dialog-card">
+      <h2>確認刪除</h2>
+      <p id="confirmText"></p>
+      <div id="confirmList" class="confirm-list"></div>
+      <label>
+        <span>Commit 訊息</span>
+        <input id="commitMessage" value="Delete selected files via web manager" />
+      </label>
+      <div class="dialog-actions">
+        <button value="cancel">取消</button>
+        <button id="confirmDeleteBtn" value="default" class="danger">確定刪除</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script src="app.js"></script>
+</body>
+</html>
