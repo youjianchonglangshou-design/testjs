@@ -1,0 +1,6 @@
+{
+  "version": "1.2.0",
+  "type": "GitHub Pages static frontend",
+  "api": "CMC official keyless through CORS proxy",
+  "yml": false
+}
