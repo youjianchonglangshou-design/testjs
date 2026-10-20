@@ -1,11 +1,32 @@
-# CMC 加密貨幣恐懼貪婪指數 v1.2.0
+# CMC 恐懼貪婪指數 1 年 — v1.3.0
 
-## 使用方式
-將 `index.html` 與 `VERSION.json` 放到 GitHub Repository 根目錄，開啟 Settings → Pages → Deploy from a branch → main / (root)。開啟網頁時自動取得 CMC 官方一年歷史與最新數值，不需要 GitHub Actions、不需要 YAML、不需要事前產生 JSON。
+**僅一個新的 Cloudflare Worker + 一個 GitHub Pages HTML。無 YAML、無 GitHub Actions、無 R2。**
 
-## 資料來源
-- CMC 官方免金鑰 API：`https://pro-api.coinmarketcap.com/public-api/v3/fear-and-greed/historical?limit=370` 與 `/latest`
-- 預設先嘗試直接呼叫，受 CORS 限制時再依序嘗試 cors.dev、AllOrigins、corsproxy.io 與 CodeTabs 公開 CORS 代理。
-- BTC USD 價格與成交額：CryptoCompare 公開 API，與 CMC 官方報價不同。若該 API 無法使用，僅顯示 CMC 指數曲線。
+## 1. 建立新的 Cloudflare Worker
 
-**重要限制**：公開 CORS 代理屬第三方服務，可能有流量限制、停止服務、拒絕代轉 CMC 或資料過長等問題。本版本在無法讀取時顯示錯誤，不會用其他指數或假資料代替。由於製作環境不能連接這些 API，尚未完成 GitHub Pages 線上實際驗證。
+Cloudflare Dashboard → 左側 **Compute** → **Workers & Pages** → **Create** → **Start with Hello World**（或 Worker）→ 名稱可用 `cmc-fear-greed` → **Deploy**。
+
+在新 Worker 中按 **Edit code**，把 `worker.js` 的全部內容覆蓋進去 → 按 **Deploy**。
+
+打開新 Worker 的網址（例如 `https://cmc-fear-greed.XXX.workers.dev/health`），應看到 `"ok":true`。
+
+打開 `https://cmc-fear-greed.XXX.workers.dev/api/historical`，應看到 `data` 陣列；若顯示 `error`，請截圖，此時要排查 CMC 對 Worker 來源的存取（Worker 並不保證能繞過上游封鎖）。
+
+## 2. 更新 GitHub Pages
+
+用記事本開啟 `index.html`，搜尋 `WORKER_BASE`，將：
+
+`https://YOUR-NEW-WORKER.YOUR-SUBDOMAIN.workers.dev`
+
+換成你的實際 Worker 網址，**不要在後面加 `/health` 或 `/api`**。
+
+將 `index.html` 上傳覆蓋 GitHub Pages 目前所在資料夾的 `index.html`（例如 `testjs/CMC_Fear_Greed_GitHub_v1.2.0/index.html`）。
+
+開啟既有 GitHub Pages URL，重新整理。瀏覽器讀取 Worker；Worker 即時讀取 CMC 免費 API，並緩存歷史 6 小時、最新 15 分鐘。
+
+## 技術與測試
+
+- CMC 恐懼貪婪數據不替換為其他指數；時間戳支援 Unix 秒／毫秒及 ISO 日期。
+- BTC 價格與交易量來自 CryptoCompare，與 CMC 的圖表可能略有差異。
+- Worker 只允許 3 個固定 API 路由，沒有任意 URL 代理功能。
+- 程式做過語法與 ZIP 檢查；需實際部署後才能驗證 Worker 是否成功連上 CMC。

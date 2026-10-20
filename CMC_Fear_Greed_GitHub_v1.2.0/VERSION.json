@@ -1,6 +1,5 @@
 {
-  "version": "1.2.0",
-  "type": "GitHub Pages static frontend",
-  "api": "CMC official keyless through CORS proxy",
-  "yml": false
+  "version": "1.3.0",
+  "architecture": "GitHub Pages + Cloudflare Worker (no scheduled jobs)",
+  "updated": "2026-10-20"
 }
